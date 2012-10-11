@@ -1,10 +1,9 @@
 package edu.test.client;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStreamWriter;
+import java.io.OutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
 import java.util.List;
@@ -54,6 +53,7 @@ public class GameClientActivity  extends AndroidApplication {
 	public class GameClient implements ApplicationListener, InputProcessor {
 		final static float MAX_VELOCITY = 7f;		
 		boolean jump = false;	
+		boolean coopJump = false;
 		World world;
 		Body player;
 		Body coop;
@@ -80,7 +80,7 @@ public class GameClientActivity  extends AndroidApplication {
 		long lastTapTime = 0;
 		Socket mSocket = null;
 		BufferedReader mNetReader = null;
-		BufferedOutputStream mNetWriter = null;
+		OutputStream mNetWriter = null;
 		
 		long lastPosSync = 0;
 		
@@ -100,14 +100,14 @@ public class GameClientActivity  extends AndroidApplication {
 	        {
 	            int _port   = 8080;
 	            mSocket = new Socket("192.168.0.10", _port);
-	            
+	            mSocket.setTcpNoDelay(true);
 	            // Open stream
 	            input = mSocket.getInputStream();
 	            
-	            
 	            // Show the server response
 	            mNetReader = new BufferedReader(new InputStreamReader(input));
-	            mNetWriter = new BufferedOutputStream(mSocket.getOutputStream());
+	            mNetWriter = mSocket.getOutputStream();
+
 	        }
 	        catch (UnknownHostException e)
 	        {
@@ -284,6 +284,9 @@ public class GameClientActivity  extends AndroidApplication {
     					
     					coop.setTransform(posX,posY,0);
 					}
+					else if (response.equals("JUMP")) {
+						coopJump = true;
+					}
 				}
 			}
 			catch (IOException e) {
@@ -350,7 +353,11 @@ public class GameClientActivity  extends AndroidApplication {
 			}
 
 			// jump, but only when grounded
-			if(jump) {			
+			if(jump) {
+				try {
+					mNetWriter.write(new String("JUMP\n").getBytes());
+					mNetWriter.flush();
+				} catch (IOException e) { e.printStackTrace(); }
 				jump = false;
 				if(grounded) {
 					player.setLinearVelocity(vel.x, 0);			
@@ -430,6 +437,18 @@ public class GameClientActivity  extends AndroidApplication {
 				if(coopRight && vel.x < MAX_VELOCITY) {
 					coop.applyLinearImpulse(2f, 0, pos.x, pos.y);
 				}
+				
+				// jump, but only when grounded
+				if(coopJump) {
+					coopJump = false;
+					if(grounded) {
+						coop.setLinearVelocity(vel.x, 0);			
+						System.out.println("jump before: " + coop.getLinearVelocity());
+						coop.setTransform(pos.x, pos.y + 0.01f, 0);
+						coop.applyLinearImpulse(0, 30, pos.x, pos.y);			
+						System.out.println("jump, " + coop.getLinearVelocity());				
+					}
+				}					
 			}
 
 			// ======================================================
